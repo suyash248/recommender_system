@@ -4,14 +4,6 @@
 venv
 environment
 .environment
-bin
-hooks
-lib
-include
-HEAD
-config
-description
-info
 etc/conf/settings.py
 *.lprof
 *.swp
