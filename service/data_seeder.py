@@ -86,7 +86,7 @@ def parse_meta_file(meta_file_path, similarity_mappings_file_path):
 
 def create_schema_from_meta_file(meta_file_name='amazon-meta-small.txt.gz',
                                  similarity_mappings_file_name='similarity_mappings.txt'):
-    meta_file_path = os.path.join(project_root, 'public', meta_file_name)
+    meta_file_path = os.path.join(project_root, 'public', 'sample', meta_file_name)
     similarity_mappings_file_path = os.path.join(project_root, 'public', similarity_mappings_file_name)
 
     q = """
@@ -176,13 +176,12 @@ def create_products_mapping():
         neo4j_con.run(q, params)
 
 
-def parse_products_mapping_file(products_mapping_file_name='amazon0303-small.txt'):
-    products_mapping_file_path = os.path.join(project_root, 'public', products_mapping_file_name)
-    products_reader = list(csv.reader(open(products_mapping_file_path, 'rb'), delimiter='\t'))
-
-    for prod_ids in products_reader:
-        yield prod_ids[0], prod_ids[1]
-
+def parse_products_mapping_file(products_mapping_file_name='amazon0302-small.txt.gz'):
+    products_mapping_file_path = os.path.join(project_root, 'public', 'sample', products_mapping_file_name)
+    with gzip.open(products_mapping_file_path) as pm_infile:
+        for prod_ids in pm_infile:
+            if not prod_ids.startswith('#'):
+                yield prod_ids[0], prod_ids[1]
 
 if __name__ == '__main__':
     create_schema_from_meta_file()
