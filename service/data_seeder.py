@@ -15,8 +15,8 @@ def new_prod_meta():
         "categories": {}
     }
 
-def parse_meta_file(file_path):
-    with gzip.open(file_path) as infile:
+def parse_meta_file(meta_file_path, similarity_mappings_file_path):
+    with gzip.open(meta_file_path) as infile, open(similarity_mappings_file_path, 'w') as outfile:
         #prods_meta = []
         prod_meta = new_prod_meta()
         for line in infile:
@@ -34,10 +34,17 @@ def parse_meta_file(file_path):
                 prod_meta['salesrank'] = line.split()[1]
             elif line.startswith("similar:"):
                 sim_line = line.split()
+                sim_prods_asins = sim_line[2:]
                 prod_meta['similar'] = {
                     'total': sim_line[1],
-                    'asins': sim_line[2:]
+                    'asins': sim_prods_asins
                 }
+                if len(sim_prods_asins) > 0:
+                    sim_dict = {prod_meta['product_id']: sim_prods_asins}
+                    oline = json.dumps(sim_dict) + "\n"
+                    # oline = "{product_id}:{similar_asins}\n".format(product_id=prod_meta['product_id'],
+                    #                                                similar_asins=sim_prods_asins)
+                    outfile.write(oline)
             elif line.startswith("categories:"):
                 prod_meta['categories'] = prod_meta.get('categories', {})
                 prod_meta['categories']['count'] = int(line.split()[1])
@@ -77,36 +84,29 @@ def parse_meta_file(file_path):
                 prod_meta = new_prod_meta()
 
 
-def create_schema_from_meta_file(meta_file_name='amazon-meta-small.txt.gz'):
-    prod_meta_gen = parse_meta_file(os.path.join(project_root, 'public', meta_file_name))
+def create_schema_from_meta_file(meta_file_name='amazon-meta-small.txt.gz',
+                                 similarity_mappings_file_name='similarity_mappings.txt'):
+    meta_file_path = os.path.join(project_root, 'public', meta_file_name)
+    similarity_mappings_file_path = os.path.join(project_root, 'public', similarity_mappings_file_name)
+
+    q = """
+    MERGE (prod1:`Product`{
+    categories_count: {categories_count}, 
+    asin: {asin}, group: {group}, product_id: {product_id}, title: {title}, avg_rating: {avg_rating}, 
+    salesrank: {salesrank}, reviews_total: {reviews_total}, reviews_downloaded: {reviews_downloaded}
+    })
+    MERGE (cat1:`Category`{id: {cat}.id, name: {cat}.name})
+    MERGE (prod1) -[:BELONGS_TO]-> (cat1)
+    WITH {customers_review_details} as crd_with, prod1
+    UNWIND crd_with AS crd
+    MERGE (cust1:`Customer`{id: crd.customer_id})
+    MERGE (prod1) -[:`REVIEWED_BY`{rating: crd.rating, votes: crd.votes, helpful: crd.helpful, date: crd.date}]-> (cust1)
+    """
+
+    prod_meta_gen = parse_meta_file(meta_file_path, similarity_mappings_file_path)
     for prod_meta in prod_meta_gen:
         # print json.dumps(prod_meta)
         # print "\n------------------------------------------------------------------\n"
-        q = """
-MERGE (prod1:`Product`{
-categories_count: {categories_count}, 
-asin: {asin}, group: {group}, product_id: {product_id}, title: {title}, avg_rating: {avg_rating}, 
-salesrank: {salesrank}, reviews_total: {reviews_total}, reviews_downloaded: {reviews_downloaded}
-})
-MERGE (cat1:`Category`{id: {cat}.id, name: {cat}.name})
-MERGE (prod1) -[:BELONGS_TO]-> (cat1)
-WITH {customers_review_details} as crd_with, prod1
-UNWIND crd_with AS crd
-MERGE (cust1:`Customer`{id: crd.customer_id})
-MERGE (prod1) -[:`RATED_BY`{rating: crd.rating, votes: crd.votes, helpful: crd.helpful}]-> (cust1)
-"""
-
-        prod_props = {
-            "product_id": prod_meta.get('product_id', 'NA'),
-            "asin": prod_meta.get('asin', 'NA'),
-            "group": prod_meta.get('group', 'NA'),
-            "salesrank": prod_meta.get('salesrank', 'NA'),
-            "title": prod_meta.get('title', 'NA'),
-            "reviews_total": prod_meta['reviews'].get('total', 'NA'),
-            "reviews_downloaded": prod_meta['reviews'].get('downloaded', 'NA'),
-            "avg_rating": prod_meta['reviews'].get('avg_rating', 'NA'),
-            "categories_count": prod_meta["categories"].get("count", 'NA')
-        }
 
         cat_details = prod_meta["categories"].get("details", {})
         cat_id = cat_name = 'NA'
@@ -133,32 +133,58 @@ MERGE (prod1) -[:`RATED_BY`{rating: crd.rating, votes: crd.votes, helpful: crd.h
         }
         neo4j_con.run(q, params)
 
-def parse_and_import_products_mapping(file_path, chunk_size = 500):
-    products_reader = list(csv.reader(open(file_path, 'rb'), delimiter='\t'))
-    params = []
-    count = 0
 
-    stmt = """UNWIND {datas} AS data 
-MERGE (prod1:`Product`{id: data.prod_id1})
-MERGE (prod2:`Product`{id: data.prod_id2})
-MERGE (prod1) -[:BOUGHT_WITH]-> (prod2)
-    """
-    print "Preparing data from file...", file_path
+def parse_prod_similarity_mappings_file(similarity_mappings_file_name='similarity_mappings.txt'):
+    similarity_mappings_file_path = os.path.join(project_root, 'public', similarity_mappings_file_name)
+    with open(similarity_mappings_file_path, 'r') as sim_mapping_in_file:
+        for prod_sim_mapping in sim_mapping_in_file:
+            yield prod_sim_mapping
+
+
+def create_prod_similarity_mappings():
+    q = """
+    MATCH (prod1:`Product`{product_id: {product_id}})  
+    UNWIND {similar_asins} as asin
+    MATCH (prod2:`Product`{asin: asin})  
+    MERGE (prod1) -[:SIMILAR_TO]-> (prod2)
+            """
+
+    prod_sim_mappings_gen = parse_prod_similarity_mappings_file()
+    for prod_sim_mappings_json in prod_sim_mappings_gen:
+        prod_sim_mappings = json.loads(prod_sim_mappings_json)
+
+        product_id = prod_sim_mappings.keys()[0]
+        params = {
+            "product_id": product_id,
+            "similar_asins": prod_sim_mappings.get(product_id)
+        }
+        neo4j_con.run(q, params)
+
+
+def create_products_mapping():
+    q = """
+    MERGE (prod1:`Product`{product_id: {prod_id1}})
+    MERGE (prod2:`Product`{product_id: {prod_id2}})
+    MERGE (prod1) -[:BOUGHT_WITH]-> (prod2)
+        """
+
+    for products_mappings in parse_products_mapping_file():
+        params = {
+            "prod_id1": products_mappings[0],
+            "prod_id2": products_mappings[1]
+        }
+        neo4j_con.run(q, params)
+
+
+def parse_products_mapping_file(products_mapping_file_name='amazon0303-small.txt'):
+    products_mapping_file_path = os.path.join(project_root, 'public', products_mapping_file_name)
+    products_reader = list(csv.reader(open(products_mapping_file_path, 'rb'), delimiter='\t'))
+
     for prod_ids in products_reader:
-        prod_id1, prod_id2 = prod_ids[0], prod_ids[1]
-        params.append({"prod_id1": prod_id1, "prod_id2": prod_id2})
-        count += 1
-        if count % chunk_size == 0:
-            neo4j_con.run(stmt, {"datas": params})
-            print "Imported {} record(s) successfully!".format(len(params))
-            count = 0
-            params = []
-
-    neo4j_con.run(stmt, {"datas": params})
-    print "Imported {} record(s) successfully!".format(len(params))
+        yield prod_ids[0], prod_ids[1]
 
 
 if __name__ == '__main__':
-    #file_path = os.path.join(project_root, 'public', 'amazon0302.txt')
-    #parse_and_import(file_path)
     create_schema_from_meta_file()
+    create_prod_similarity_mappings()
+    create_products_mapping()
