@@ -4,8 +4,9 @@
 venv
 environment
 .environment
-etc/conf/settings.py
+settings.py
 *.lprof
 *.swp
 page
 .Python
+*.gz
