@@ -59,7 +59,6 @@ def parse_create_schema_from_meta_file_using_gzip(meta_file_name='amazon-meta.tx
     meta_file_path = os.path.join(project_root, 'public', meta_file_name)
     similarity_mappings_file_path = os.path.join(project_root, 'public', similarity_mappings_file_name)
 
-    chunksize = 10 ** 6
     with gzip.open(meta_file_path) as infile, open(similarity_mappings_file_path, 'w') as outfile:
         prod_meta = new_prod_meta()
         for line in infile:
@@ -93,7 +92,7 @@ def parse_create_schema_from_meta_file_using_gzip(meta_file_name='amazon-meta.tx
                     params_list.append(params)
                     prod_meta = new_prod_meta()
                     count += 1
-                    if count == 500:
+                    if count == 100:
                         execute_batch(q, deepcopy(params_list))
                         params_list = []
                         count = 0
@@ -223,7 +222,7 @@ def parse_create_schema_from_meta_file_using_pandas(meta_file_name='amazon-meta.
                     params_list.append(params)
                     prod_meta = new_prod_meta()
                     count += 1
-                    if count == 500:
+                    if count == 100:
                         execute_batch(q, deepcopy(params_list))
                         params_list = []
                         count = 0
@@ -283,6 +282,7 @@ def parse_create_schema_from_meta_file_using_pandas(meta_file_name='amazon-meta.
                     "votes": int(review_info[6]),
                     "helpful": int(review_info[8])
                 })
+
 
 def execute_batch(q, params_list):
     print "\nExecuting batch of size : {size} @ {time}".format(size=len(params_list), time=time.asctime())
@@ -365,7 +365,7 @@ def parse_products_mapping_file(products_mapping_file_name='amazon0302.txt.gz'):
 if __name__ == '__main__':
     #test_pandas()
     print "Processing and importing data from meta file..."
-    parse_create_schema_from_meta_file_using_pandas()
+    parse_create_schema_from_meta_file_using_gzip()
 
     # print "Processing and importing data from similarity file..."
     # create_prod_similarity_mappings()
