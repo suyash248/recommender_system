@@ -95,7 +95,7 @@ def parse_meta_file(meta_file_path, similarity_mappings_file_path):
                 prod_meta = new_prod_meta()
 
 
-def create_schema_from_meta_file(meta_file_name='amazon-meta-small.txt.gz',
+def create_schema_from_meta_file(meta_file_name='amazon-meta.txt.gz',
                                  similarity_mappings_file_name='similarity_mappings.txt'):
     """
     Consumes the parsed meta file information available in the form of dictionary, and creates corresponding nodes and
@@ -211,7 +211,7 @@ def create_products_mapping():
         neo4j_con.run(q, params)
 
 
-def parse_products_mapping_file(products_mapping_file_name='amazon0302-small.txt.gz'):
+def parse_products_mapping_file(products_mapping_file_name='amazon0302.txt.gz'):
     """
     Parses the products file and yield it.
     :param products_mapping_file_name: File containing products mappings.
