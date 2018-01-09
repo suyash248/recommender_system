@@ -1,9 +1,12 @@
-import csv, os, gzip, json
+import os, gzip, json
 from service.neo4jconnector import neo4j_con
 from settings import project_root
 
 
 def new_prod_meta():
+    """
+    :return: Empty meta data structure as dict.
+    """
     return {
         "asin": "NA",
         "group": "NA",
@@ -16,6 +19,14 @@ def new_prod_meta():
     }
 
 def parse_meta_file(meta_file_path, similarity_mappings_file_path):
+    """
+    Open `meta file` containing products' information, parse it and structures the information in the form of dictionary.
+    In parallel, crete a `similarity_mappings file` which contains information about similar products and later can be converted
+    into neo4j relationship named `SIMILAR_TO`.
+    :param meta_file_path: Absolute path of meta file
+    :param similarity_mappings_file_path:   Absolute path where similarity_mappings will be stored.
+    :return: Python generator containing meta data as dictionary.
+    """
     with gzip.open(meta_file_path) as infile, open(similarity_mappings_file_path, 'w') as outfile:
         #prods_meta = []
         prod_meta = new_prod_meta()
@@ -86,6 +97,15 @@ def parse_meta_file(meta_file_path, similarity_mappings_file_path):
 
 def create_schema_from_meta_file(meta_file_name='amazon-meta-small.txt.gz',
                                  similarity_mappings_file_name='similarity_mappings.txt'):
+    """
+    Consumes the parsed meta file information available in the form of dictionary, and creates corresponding nodes and
+    relationships in neo4j.
+    Nodes - Product, Customer, Category
+    Relationships - REVIEWED_BY, BELONGS_TO, SIMILAR_TO, BOUGHT_WITH
+    :param meta_file_name: Name of the meta file.
+    :param similarity_mappings_file_name: Name of similarity_mappings file.
+    :return:
+    """
     meta_file_path = os.path.join(project_root, 'public', 'sample', meta_file_name)
     similarity_mappings_file_path = os.path.join(project_root, 'public', similarity_mappings_file_name)
 
@@ -135,6 +155,11 @@ def create_schema_from_meta_file(meta_file_name='amazon-meta-small.txt.gz',
 
 
 def parse_prod_similarity_mappings_file(similarity_mappings_file_name='similarity_mappings.txt'):
+    """
+    Parse `similarity_mappings` file and yield each entry.
+    :param similarity_mappings_file_name: Name of `similarity_mappings` file
+    :return: Generator
+    """
     similarity_mappings_file_path = os.path.join(project_root, 'public', similarity_mappings_file_name)
     with open(similarity_mappings_file_path, 'r') as sim_mapping_in_file:
         for prod_sim_mapping in sim_mapping_in_file:
@@ -142,6 +167,11 @@ def parse_prod_similarity_mappings_file(similarity_mappings_file_name='similarit
 
 
 def create_prod_similarity_mappings():
+    """
+    Creates similarity_mappings for each product and store it to neo4j in the form of relationship (SIMILAR_TO)
+    indicating that underlying products are similar to each other.
+    :return:
+    """
     q = """
     MATCH (prod1:`Product`{product_id: {product_id}})  
     UNWIND {similar_asins} as asin
@@ -162,6 +192,11 @@ def create_prod_similarity_mappings():
 
 
 def create_products_mapping():
+    """
+    Creates products mapping in neo4j in the form of relationship (BOUGHT_WITH) indicating that underlying products
+    are bought together.
+    :return:
+    """
     q = """
     MERGE (prod1:`Product`{product_id: {prod_id1}})
     MERGE (prod2:`Product`{product_id: {prod_id2}})
@@ -177,6 +212,11 @@ def create_products_mapping():
 
 
 def parse_products_mapping_file(products_mapping_file_name='amazon0302-small.txt.gz'):
+    """
+    Parses the products file and yield it.
+    :param products_mapping_file_name: File containing products mappings.
+    :return:
+    """
     products_mapping_file_path = os.path.join(project_root, 'public', 'sample', products_mapping_file_name)
     with gzip.open(products_mapping_file_path) as pm_infile:
         for prod_ids in pm_infile:
