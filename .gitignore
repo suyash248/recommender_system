@@ -10,3 +10,5 @@ settings.py
 page
 .Python
 *.gz
+*.log
+metastore_db
