@@ -12,7 +12,7 @@ def new_prod_meta():
         "asin": "NA",
         "group": "NA",
         "salesrank": "NA",
-        "product_id": "NA",
+        "product_id": -1,
         "title": "NA",
         "reviews": {},
         "similar": {},
@@ -80,7 +80,7 @@ def parse_create_schema_from_meta_file_partially(meta_file_name='amazon-meta.txt
                         "name": cat_name
                     }
                     params = {
-                        "product_id": prod_meta.get('product_id', 'NA'),
+                        "product_id": int(prod_meta.get('product_id', -1)),
                         "asin": prod_meta.get('asin', 'NA'),
                         "group": prod_meta.get('group', 'NA'),
                         "salesrank": prod_meta.get('salesrank', 'NA'),
@@ -100,7 +100,7 @@ def parse_create_schema_from_meta_file_partially(meta_file_name='amazon-meta.txt
                         execute_batch(q, deepcopy(params_list))
                         params_list = []
                         count = 0
-                prod_meta['product_id'] = line.split()[1]
+                prod_meta['product_id'] = int(line.split()[1])
             elif line.startswith("ASIN:"):
                 prod_meta['asin'] = line.split()[1]
             elif line.startswith("title:"):
@@ -117,7 +117,7 @@ def parse_create_schema_from_meta_file_partially(meta_file_name='amazon-meta.txt
                     'asins': sim_prods_asins
                 }
                 if len(sim_prods_asins) > 0:
-                    sim_dict = {prod_meta['product_id']: sim_prods_asins}
+                    sim_dict = {int(prod_meta['product_id']): sim_prods_asins}
                     oline = json.dumps(sim_dict)
                     sim_list.append(oline)
                     sim_count += 1
@@ -186,10 +186,10 @@ def parse_and_create_prod_similarity_mappings(similarity_mappings_file_name='sim
         for prod_sim_mappings_json in sim_mapping_in_file:
             prod_sim_mappings = json.loads(prod_sim_mappings_json)
 
-            product_id = prod_sim_mappings.keys()[0]
+            product_id = int(prod_sim_mappings.keys()[0])
             params = {
                 "product_id": product_id,
-                "similar_asins": prod_sim_mappings.get(product_id)
+                "similar_asins": prod_sim_mappings.get(str(product_id))
             }
             params_list.append(params)
             count += 1
@@ -221,11 +221,13 @@ def parse_and_create_products_mapping_file(products_mapping_file_name='amazon030
 
     products_mapping_file_path = os.path.join(project_root, 'public', products_mapping_file_name) # 'sample',
     with gzip.open(products_mapping_file_path) as pm_infile:
-        for prod_ids in pm_infile:
-            if not prod_ids.startswith('#'):
+        for prod_ids_line in pm_infile:
+            if not prod_ids_line.startswith('#'):
+                prod_ids_line = prod_ids_line.strip()
+                prod_ids = prod_ids_line.split("\t")
                 params = {
-                    "prod_id1": prod_ids[0],
-                    "prod_id2": prod_ids[1]
+                    "prod_id1": int(prod_ids[0]),
+                    "prod_id2": int(prod_ids[1])
                 }
                 params_list.append(params)
                 count += 1
@@ -244,7 +246,7 @@ if __name__ == '__main__':
     parse_create_schema_from_meta_file_partially(batch_size=2000)
 
     print "Processing and importing data from similarity file..."
-    parse_and_create_prod_similarity_mappings()
+    parse_and_create_prod_similarity_mappings(batch_size=1000)
 
     print "Creating mappings for products which are co-purchased..."
     parse_and_create_products_mapping_file(batch_size=2000)
