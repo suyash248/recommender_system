@@ -22,7 +22,6 @@ def load_neo4j_rdd(sc, neo4j_count_query, neo4j_main_query, offset=0, limit=1500
         # Node().iteritems()
         print "Loaded {} nodes to RDD @ {}".format(offset+limit, time.asctime())
         neo4j_rdd = neo4j_rdd.union(sc.parallelize(nodes))
-        break
     print "Finished at ", time.asctime()
     print "Processed {} records and loaded in RDD. Started @ {} Finished @ {}"\
         .format(total_count, start_time, time.asctime())
