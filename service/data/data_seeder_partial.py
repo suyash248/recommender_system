@@ -30,7 +30,7 @@ def create_indices():
 
 
 def execute_batch(q, params_list):
-    print "Executing batch of size : {size} @ {time}".format(size=len(params_list), time=time.asctime())
+    #print "Executing batch of size : {size} @ {time}".format(size=len(params_list), time=time.asctime())
     tx = neo4j_con.begin()
     for params in params_list:
         tx.append(q, params)
@@ -242,11 +242,14 @@ def parse_and_create_products_mapping_file(products_mapping_file_name='amazon030
 
 if __name__ == '__main__':
     create_indices()
-    print "Processing and importing data from meta file..."
+    print "[START] Meta file @ {}".format(time.asctime())
     parse_create_schema_from_meta_file_partially(batch_size=2000)
+    print "[END] Meta file @ {}".format(time.asctime())
 
-    print "Processing and importing data from similarity file..."
+    print "[START] similarity mappings file @ {}".format(time.asctime())
     parse_and_create_prod_similarity_mappings(batch_size=1000)
+    print "[END] similarity mappings file @ {}".format(time.asctime())
 
-    print "Creating mappings for products which are co-purchased..."
+    print "[START] products mappings file @ {}".format(time.asctime())
     parse_and_create_products_mapping_file(batch_size=2000)
+    print "[END] similarity mappings file @ {}".format(time.asctime())
