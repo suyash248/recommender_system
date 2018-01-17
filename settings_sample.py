@@ -1,3 +1,7 @@
+import os
+
+project_root = os.path.dirname(os.path.abspath(__file__)) # This is your Project Root
+
 # bolt	        Use Bolt* protocol (None means autodetect)	bool,   None	None
 # secure	    Use a secure connection (Bolt/TLS + HTTPS)	bool	False
 # host	        Database server host name	                str	    'localhost'
@@ -9,3 +13,5 @@
 neo4j_config = {
     "password": "password"
 }
+
+{ "Id":   1,"similar": ["0804215715", "156101074X", "0687023955", "0687074231", "082721619X"]}
