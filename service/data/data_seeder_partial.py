@@ -1,4 +1,4 @@
-import os, gzip, json, time, csv, threading
+import os, gzip, json, time, csv, uuid
 from service.neo4jconnector import neo4j_con
 from settings import project_root
 from copy import deepcopy
@@ -19,14 +19,21 @@ def new_prod_meta():
         "categories": {}
     }
 
+def random_id():
+    return int(uuid.uuid4().int & (1<<24)-1)
+
 def create_indices():
     prod_id_index = "CREATE INDEX ON :Product(product_id)"
     prod_asin_index = "CREATE INDEX ON :Product(asin)"
     category_id_index = "CREATE INDEX ON :Category(id)"
+    customer_id_index = "CREATE INDEX ON :Customer(customer_id)"
+    customer_num_id_index = "CREATE INDEX ON :Customer(num_id)"
 
     neo4j_con.run(prod_id_index)
     neo4j_con.run(prod_asin_index)
     neo4j_con.run(category_id_index)
+    neo4j_con.run(customer_id_index)
+    neo4j_con.run(customer_num_id_index)
 
 
 def execute_batch(q, params_list):
@@ -40,6 +47,16 @@ def execute_batch(q, params_list):
 
 def parse_create_schema_from_meta_file_partially(meta_file_name='amazon-meta.txt.gz',
                                                  similarity_mappings_file_name='similarity_mappings.txt', batch_size=500):
+    # q = """
+    #         MERGE (prod1:`Product`{
+    #         categories_count: {categories_count},
+    #         asin: {asin}, group: {group}, product_id: {product_id}, title: {title}, avg_rating: {avg_rating},
+    #         salesrank: {salesrank}, reviews_total: {reviews_total}, reviews_downloaded: {reviews_downloaded}
+    #         })
+    #         MERGE (cat1:`Category`{id: {cat}.id, name: {cat}.name})
+    #         MERGE (prod1) -[:BELONGS_TO]-> (cat1)
+    #         """
+
     q = """
             MERGE (prod1:`Product`{
             categories_count: {categories_count}, 
@@ -48,6 +65,10 @@ def parse_create_schema_from_meta_file_partially(meta_file_name='amazon-meta.txt
             })
             MERGE (cat1:`Category`{id: {cat}.id, name: {cat}.name})
             MERGE (prod1) -[:BELONGS_TO]-> (cat1)
+            WITH {customers_review_details} as crd_with, prod1
+            UNWIND crd_with AS crd
+            MERGE (cust1:`Customer`{customer_id: crd.customer_id}) ON CREATE SET cust1.num_id = crd.num_id 
+            MERGE (prod1) -[:`REVIEWED_BY`{rating: crd.rating, votes: crd.votes, helpful: crd.helpful, date: crd.date}]-> (cust1)
             """
 
     count = sim_count = 0
@@ -79,6 +100,7 @@ def parse_create_schema_from_meta_file_partially(meta_file_name='amazon-meta.txt
                         "id": cat_id,
                         "name": cat_name
                     }
+                    customers_review_details = prod_meta['reviews'].get("customers_review_details", [])
                     params = {
                         "product_id": int(prod_meta.get('product_id', -1)),
                         "asin": prod_meta.get('asin', 'NA'),
@@ -89,7 +111,8 @@ def parse_create_schema_from_meta_file_partially(meta_file_name='amazon-meta.txt
                         "reviews_downloaded": prod_meta['reviews'].get('downloaded', 'NA'),
                         "avg_rating": prod_meta['reviews'].get('avg_rating', 'NA'),
                         "categories_count": prod_meta["categories"].get("count", 'NA'),
-                        "cat": cat
+                        "cat": cat,
+                        "customers_review_details": customers_review_details
                     }
                     params_list.append(params)
                     prod_meta = new_prod_meta()
@@ -152,6 +175,20 @@ def parse_create_schema_from_meta_file_partially(meta_file_name='amazon-meta.txt
                 prod_meta['reviews']['total'] = int(review_stats[2])
                 prod_meta['reviews']['downloaded'] = int(review_stats[4])
                 prod_meta['reviews']['avg_rating'] = float(review_stats[7])
+
+            elif line.find("cutomer:") > -1:
+                prod_meta['reviews'] = prod_meta.get('reviews', {})
+                prod_meta['reviews']['customers_review_details'] = prod_meta['reviews'].get("customers_review_details",
+                                                                                            [])
+                review_info = line.split()
+                prod_meta['reviews']['customers_review_details'].append({
+                    "date": review_info[0],
+                    "customer_id": review_info[2],  # str(self.customer_map[review_info[2]])
+                    "num_id": random_id(),
+                    "rating": int(review_info[4]),
+                    "votes": int(review_info[6]),
+                    "helpful": int(review_info[8])
+                })
 
     if len(params_list) > 0:
         execute_batch(q, deepcopy(params_list))
@@ -243,10 +280,10 @@ def parse_and_create_products_mapping_file(products_mapping_file_name='amazon030
 if __name__ == '__main__':
     create_indices()
     print "Processing and importing data from meta file..."
-    parse_create_schema_from_meta_file_partially(batch_size=2000)
+    parse_create_schema_from_meta_file_partially(batch_size=1000)
 
     print "Processing and importing data from similarity file..."
     parse_and_create_prod_similarity_mappings(batch_size=1000)
 
-    print "Creating mappings for products which are co-purchased..."
-    parse_and_create_products_mapping_file(batch_size=2000)
+    # print "Creating mappings for products which are co-purchased..."
+    # parse_and_create_products_mapping_file(batch_size=2000)
