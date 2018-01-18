@@ -278,12 +278,12 @@ def parse_and_create_products_mapping_file(products_mapping_file_name='amazon030
         count = 0
 
 if __name__ == '__main__':
-    create_indices()
-    print "Processing and importing data from meta file..."
-    parse_create_schema_from_meta_file_partially(batch_size=1000)
+    # create_indices()
+    # print "Processing and importing data from meta file..."
+    # parse_create_schema_from_meta_file_partially(batch_size=1000)
+    #
+    # print "Processing and importing data from similarity file..."
+    # parse_and_create_prod_similarity_mappings(batch_size=1000)
 
-    print "Processing and importing data from similarity file..."
-    parse_and_create_prod_similarity_mappings(batch_size=1000)
-
-    # print "Creating mappings for products which are co-purchased..."
-    # parse_and_create_products_mapping_file(batch_size=2000)
+    print "Creating mappings for products which are co-purchased..."
+    parse_and_create_products_mapping_file(batch_size=2000)
