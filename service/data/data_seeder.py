@@ -1,4 +1,4 @@
-import os, gzip, json, time, csv, threading
+import os, gzip, json, time, csv, uuid
 from service.neo4jconnector import neo4j_con
 from settings import project_root
 from copy import deepcopy
@@ -19,16 +19,21 @@ def new_prod_meta():
         "categories": {}
     }
 
+def random_id():
+    return int(uuid.uuid4().int & (1<<24)-1)
+
 def create_indices():
     prod_id_index = "CREATE INDEX ON :Product(product_id)"
     prod_asin_index = "CREATE INDEX ON :Product(asin)"
     category_id_index = "CREATE INDEX ON :Category(id)"
     customer_id_index = "CREATE INDEX ON :Customer(customer_id)"
+    customer_num_id_index = "CREATE INDEX ON :Customer(num_id)"
 
     neo4j_con.run(prod_id_index)
     neo4j_con.run(prod_asin_index)
     neo4j_con.run(category_id_index)
     neo4j_con.run(customer_id_index)
+    neo4j_con.run(customer_num_id_index)
 
 
 def execute_batch(q, params_list):
@@ -62,7 +67,7 @@ def parse_create_schema_from_meta_file_partially(meta_file_name='amazon-meta.txt
             MERGE (prod1) -[:BELONGS_TO]-> (cat1)
             WITH {customers_review_details} as crd_with, prod1
             UNWIND crd_with AS crd
-            MERGE (cust1:`Customer`{id: crd.customer_id})
+            MERGE (cust1:`Customer`{customer_id: crd.customer_id}) ON CREATE SET cust1.num_id = crd.num_id 
             MERGE (prod1) -[:`REVIEWED_BY`{rating: crd.rating, votes: crd.votes, helpful: crd.helpful, date: crd.date}]-> (cust1)
             """
 
@@ -179,6 +184,7 @@ def parse_create_schema_from_meta_file_partially(meta_file_name='amazon-meta.txt
                 prod_meta['reviews']['customers_review_details'].append({
                     "date": review_info[0],
                     "customer_id": review_info[2],  # str(self.customer_map[review_info[2]])
+                    "num_id": random_id(),
                     "rating": int(review_info[4]),
                     "votes": int(review_info[6]),
                     "helpful": int(review_info[8])
@@ -272,12 +278,12 @@ def parse_and_create_products_mapping_file(products_mapping_file_name='amazon030
         count = 0
 
 if __name__ == '__main__':
-    create_indices()
-    print "Processing and importing data from meta file..."
-    parse_create_schema_from_meta_file_partially(batch_size=500)
+    # create_indices()
+    # print "Processing and importing data from meta file..."
+    # parse_create_schema_from_meta_file_partially(batch_size=1000)
+    #
+    # print "Processing and importing data from similarity file..."
+    # parse_and_create_prod_similarity_mappings(batch_size=1000)
 
-    print "Processing and importing data from similarity file..."
-    parse_and_create_prod_similarity_mappings(batch_size=1000)
-
-    # print "Creating mappings for products which are co-purchased..."
-    # parse_and_create_products_mapping_file(batch_size=2000)
+    print "Creating mappings for products which are co-purchased..."
+    parse_and_create_products_mapping_file(batch_size=2000)
